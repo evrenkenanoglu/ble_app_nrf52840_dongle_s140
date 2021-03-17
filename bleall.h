@@ -146,7 +146,7 @@ static uint8_t m_beacon_info[APP_BEACON_INFO_LENGTH] = /**< Information advertis
 INTERFACE void ble_stack_init(tsBleParams *params);
 INTERFACE void ble_params_init(tsBleParams *params);
 INTERFACE void advertising_init(tsBleParams *params);
-INTERFACE void gatt_init(tsBleParams *params);
+INTERFACE void gattInit(tsBleParams *params);
 INTERFACE void gap_params_init(const char *deviceName);
 
 INTERFACE ret_code_t bleAdvertisingStart(tsBleParams *params);

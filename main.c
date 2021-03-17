@@ -78,6 +78,7 @@
 NRF_BLE_SCAN_DEF(bleScanModule); /**< Scanning Module instance. */
 NRF_BLE_GATT_DEF(gattModule);    /**< GATT module instance. */
 
+
 /** VARIABLES *****************************************************************/
 
 tsBleScanParams bleScanParams;
@@ -118,6 +119,15 @@ uint8_t advertisingDataPacket3[] =
         0xBB, /// Dummy Values
 };
 
+uint8_t dataPacketExpected[] =
+{
+    APP_COMPANY_IDENTIFIER,
+    0xAA,
+    0xFF,
+    0xAA,
+};
+
+
 /** LOCAL FUNCTION DECLARATIONS ***********************************************/
 void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name);
 static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context);
@@ -125,8 +135,20 @@ static void idle_state_handle(void);
 static void createTimers();
 APP_TIMER_DEF(timerRefreshAdvDataBLE);
 static void timerCBRefreshAdvData();
-APP_TIMER_DEF(timerScanHandler);
-static void tcbScanHandler();
+static char compareArray(uint8_t *arrayFirst, uint8_t *arraySecond, uint8_t size);
+static void deviceDetectionHandler(void);
+
+
+#if MASTER_ENABLE
+APP_TIMER_DEF(timerProgramMaster);
+
+#else
+APP_TIMER_DEF(timerProgramSlave);
+
+#endif
+
+
+static void tcbProgramMasterHandler();
 static void startTimers();
 
 uint32_t counter = 0;
@@ -140,6 +162,7 @@ int main(void)
     boardInit();
     createTimers();
 
+#if BLE_ENABLE
     //BLEParams.bleEventHandler = bleEventHandler;
     BLEParams.gatt           = &gattModule;
     bleScanParams.scanModule = &bleScanModule;
@@ -150,8 +173,8 @@ int main(void)
 
     NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, bleEventHandler, NULL);
 
-    gap_params_init("NORDIC_EVREN_SLAVE");
-    gatt_init(&BLEParams);
+    gap_params_init(DEVICE_NAME);
+    gattInit(&BLEParams);
 
 #if ADVERTISEMENT_ENABLE
     advertising_init(&BLEParams);
@@ -161,6 +184,7 @@ int main(void)
     bleScanInit(&bleScanParams);
 #endif
 
+#endif
     startTimers();
 
     NRF_LOG_INFO("Beacon example started.");
@@ -224,11 +248,13 @@ static void timerCBRefreshAdvData()
     }
 }
 
+
+#if MASTER_ENABLE
 /**
- * @brief Refresh Ble Scanning
+ * @brief Ble Program Handler
  * 
  */
-static void tcbScanHandler()
+static void tcbProgramMasterHandler()
 {
     ret_code_t errCode;
     ///> TX Power Lever Supported: -40dBm, -20dBm, -16dBm, -12dBm, -8dBm, -4dBm, 0dBm, +3dBm and +4dBm.
@@ -238,13 +264,14 @@ static void tcbScanHandler()
         {
             programParams.programStatus  = eModeScanning;
             programParams.programCounter = 0;
-            app_timer_start(timerScanHandler, APP_TIMER_TICKS(1000), NULL);
+            app_timer_start(timerProgramMaster, APP_TIMER_TICKS(1000), NULL);
 #if JLINK_DEBUG_PRINT_ENABLE
             printf("Program Started!\n");
 #endif
         }
         break;
         case eModeSleep:
+            
 
             break;
         case eModeScanning:
@@ -256,7 +283,7 @@ static void tcbScanHandler()
                 BLEParams.bleAdvStatus       = eBleIdle;
                 programParams.programCounter = 0;
                 programParams.programStatus  = eModeAdvertising;
-                app_timer_start(timerScanHandler, APP_TIMER_TICKS(TCB_MAIN_TASK_SWITCH_MODE_INTERVAL), NULL);
+                app_timer_start(timerProgramMaster, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
 
 #if JLINK_DEBUG_PRINT_ENABLE
                 printf("Scanning Timeout!\n");
@@ -274,8 +301,8 @@ static void tcbScanHandler()
                     APP_ERROR_CHECK(errCode);
                 }
                 BLEParams.bleAdvStatus = eBleScanning;
-                programParams.programCounter += TCB_MAIN_TASK_INTERVAL;
-                app_timer_start(timerScanHandler, APP_TIMER_TICKS(TCB_MAIN_TASK_INTERVAL), NULL);
+                programParams.programCounter += TCB_PROGRAM_TASK_INTERVAL;
+                app_timer_start(timerProgramMaster, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);
 
 #if JLINK_DEBUG_PRINT_ENABLE
                 printf("Scanning...\n");
@@ -295,7 +322,7 @@ static void tcbScanHandler()
                 BLEParams.bleAdvStatus       = eBleIdle;
                 programParams.programCounter = 0;
                 programParams.programStatus  = eModeScanning;
-                app_timer_start(timerScanHandler, APP_TIMER_TICKS(TCB_MAIN_TASK_SWITCH_MODE_INTERVAL), NULL);
+                app_timer_start(timerProgramMaster, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
 
 #if JLINK_DEBUG_PRINT_ENABLE
                 printf("Advertising Timeout!\n");
@@ -309,8 +336,8 @@ static void tcbScanHandler()
             {
                 errCode                = bleAdvUpdateData(&BLEParams, advertisingDataPacket2, sizeof(advertisingDataPacket2));
                 BLEParams.bleAdvStatus = eBleAdvertising;
-                programParams.programCounter += TCB_MAIN_TASK_INTERVAL;
-                app_timer_start(timerScanHandler, APP_TIMER_TICKS(TCB_MAIN_TASK_INTERVAL), NULL);
+                programParams.programCounter += TCB_PROGRAM_TASK_INTERVAL;
+                app_timer_start(timerProgramMaster, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);
 
 #if JLINK_DEBUG_PRINT_ENABLE
                 printf("Advertising...!\n");
@@ -329,6 +356,147 @@ static void tcbScanHandler()
     }
 }
 
+
+#else
+
+/**
+ * @brief Slave Program Handler
+ * 
+ */
+static void tcbProgramSlaveHandler()
+{
+    ret_code_t errCode;
+    ///> TX Power Lever Supported: -40dBm, -20dBm, -16dBm, -12dBm, -8dBm, -4dBm, 0dBm, +3dBm and +4dBm.
+    switch (programParams.programStatus)
+    {
+        case eModeFirstStart:
+        {
+            programParams.programStatus  = eModeScanning;
+            programParams.programCounter = 0;
+            app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_INIT_DELAY), NULL);
+#if JLINK_DEBUG_PRINT_ENABLE
+            printf("Program Started!\n");
+#endif
+        }
+        break;
+        case eModeSleep:
+        {
+            if(programParams.programCounter >= SLEEP_DURATION) // Sleeping Timeout... Mode Changing to Scanning Mode... 
+            {
+                programParams.programStatus = eModeScanning; // eModeScanning
+                programParams.programCounter = 0;
+                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
+            }
+            else // Sleeping...
+            {
+                
+                programParams.programCounter += TCB_PROGRAM_TASK_INTERVAL;
+                programParams.programStatus = eModeSleep;
+                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);                
+            }
+        }
+
+        
+        break;
+
+        case eModeInitBle:
+        {
+            //TO DO: Later we will put a initial delay to BLE Init again...
+        }
+        case eModeScanning:
+        {
+            if (programParams.programCounter >= SCAN_TIMEOUT) // Scanning Timeout... Mode Changing to Advertisement....
+            {
+                bleScanStop(&bleScanParams);
+
+                BLEParams.bleAdvStatus       = eBleIdle;
+                programParams.programCounter = 0;
+
+                if(programParams.deviceDetectionStatus == eDeviceDetected) // if master device is detected in the environment during scanning...
+                {
+                    programParams.programStatus = eModeAdvertising;
+                    app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
+                    programParams.deviceDetectionStatus = eDeviceNotDetected;
+                }
+                else // if master device is not detected in the environment during scanning...
+                {
+                    programParams.programStatus = eModeSleep; ///eModeSleep
+                    app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
+                }
+
+#if JLINK_DEBUG_PRINT_ENABLE
+                printf("Scanning Timeout!\n");
+#endif
+
+#if LED_INDICATORS_ENABLE
+                bsp_board_led_off(SCANNING_LED);
+#endif
+            }
+            else // Scanning...
+            {
+                if (!(BLEParams.bleAdvStatus == eBleScanning))
+                {
+                    errCode = bleScanStart(&bleScanParams);
+                    APP_ERROR_CHECK(errCode);
+                }
+                BLEParams.bleAdvStatus = eBleScanning;
+                programParams.programCounter += TCB_PROGRAM_TASK_INTERVAL;
+                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);
+
+#if JLINK_DEBUG_PRINT_ENABLE
+                printf("Scanning...\n");
+#endif
+
+#if LED_INDICATORS_ENABLE
+                bsp_board_led_on(SCANNING_LED);
+#endif
+            }
+        }
+        break;
+        case eModeAdvertising:
+        {
+            if (programParams.programCounter >= ADVERTISEMENT_TIMEOUT) // Advertising Timeout... Mode Changing to Scanning....
+            {
+                bleAdvertisingStop(&BLEParams);
+                BLEParams.bleAdvStatus       = eBleIdle;
+                programParams.programCounter = 0;
+                programParams.programStatus  = eModeScanning; // eModeScanning
+                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
+
+#if JLINK_DEBUG_PRINT_ENABLE
+                printf("Advertising Timeout!\n");
+#endif
+
+#if LED_INDICATORS_ENABLE
+                bsp_board_led_off(ADVERTISEMENT_LED);
+#endif
+            }
+            else // Advertising...
+            {
+                errCode                = bleAdvUpdateData(&BLEParams, advertisingDataPacket2, sizeof(advertisingDataPacket2));
+                BLEParams.bleAdvStatus = eBleAdvertising;
+                programParams.programCounter += TCB_PROGRAM_TASK_INTERVAL;
+                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);
+
+#if JLINK_DEBUG_PRINT_ENABLE
+                printf("Advertising...!\n");
+#endif
+
+#if LED_INDICATORS_ENABLE
+
+                bsp_board_led_on(ADVERTISEMENT_LED);
+#endif
+            }
+        }
+        break;
+
+        default:
+            break;
+    }
+}
+
+#endif
+
 /**
  * @brief Create a Timers object
  * 
@@ -336,16 +504,32 @@ static void tcbScanHandler()
 void createTimers()
 {
     ret_code_t errCode;
-    //errCode = app_timer_create(&timerRefreshAdvDataBLE, APP_TIMER_MODE_REPEATED, timerCBRefreshAdvData);
-    errCode = app_timer_create(&timerScanHandler, APP_TIMER_MODE_SINGLE_SHOT, tcbScanHandler);
+//errCode = app_timer_create(&timerRefreshAdvDataBLE, APP_TIMER_MODE_REPEATED, timerCBRefreshAdvData);
+#if MASTER_ENABLE
+
+    errCode = app_timer_create(&timerProgramMaster, APP_TIMER_MODE_SINGLE_SHOT, tcbProgramMasterHandler);
+
+#else
+
+    errCode = app_timer_create(&timerProgramSlave, APP_TIMER_MODE_SINGLE_SHOT, tcbProgramSlaveHandler);
+
+#endif
 }
 
 void startTimers()
 {
     ret_code_t errCode;
     //errCode = app_timer_start(timerRefreshAdvDataBLE,   APP_TIMER_TICKS(ADVERTISEMENT_PACKET_UPDATE_INTERVAL), NULL);
-    errCode = app_timer_start(timerScanHandler, APP_TIMER_TICKS(TCB_MAIN_TASK_INTERVAL), NULL);
 
+#if MASTER_ENABLE
+
+    errCode = app_timer_start(timerProgramMaster, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);
+
+#else
+
+    errCode = app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);
+
+#endif
 }
 
 static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context)
@@ -362,13 +546,15 @@ static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context)
 
             //if(124==p_adv_report->peer_addr.addr[0])
             {
+                
+#if FILTER_DEVICE_NAME_ENABLE
+
                 char *p_msg         = "Name: %s\n\r";
                 uint8_t *deviceName = ble_advdata_parse(p_gap_evt->params.adv_report.data.p_data, p_gap_evt->params.adv_report.data.len, BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME);
 
-#if FIlTER_DEVICE_NAME_ENABLE
-
-                if (!strcmp(deviceName, FIlTER_DEVICE_NAME))
+                if (!strcmp(deviceName, FILTER_DEVICE_NAME))
                 {
+                    // Name
                     counter++;
                     printf("%d\n\r", counter);
                     if (NULL == deviceName)
@@ -401,6 +587,7 @@ static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context)
                     }
                     printf("\n\r");
 
+                    /// Manufacturer Data 
                     p_msg                     = "Manufacturer Data : ";
                     uint8_t *manufacturerData = ble_advdata_parse(p_adv_report->data.p_data, p_adv_report->data.len, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA);
                     if (manufacturerData == NULL)
@@ -422,6 +609,24 @@ static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context)
                         }
                         printf("\n\r");
                     }
+                    
+                    /// RSSI POWER
+                    printf("RSSI: %d\n\r", p_adv_report->rssi);
+
+#if RSSI_FILTER_ENABLE
+                    if (p_adv_report->rssi > RSSI_FILTER_VALUE)
+                    {
+                        deviceDetectionHandler(); // Filtered Device Detected Handler
+                    }
+#else
+                    deviceDetectionHandler(); // Filtered Device Detected Handler
+
+#endif
+
+                    // if(!compareArray(manufacturerData, dataPacketExpected, sizeof(manufacturerData + 1) ))
+                    // {
+                    //     // TO DO: Verifying... 
+                    // }
 
                     //printf("data: ");
                     //for (int i = 0; i < p_adv_report->data.len; i++)
@@ -432,6 +637,8 @@ static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context)
                 }
 
 #else
+                char *p_msg         = "Name: %s\n\r";
+                uint8_t *deviceName = ble_advdata_parse(p_gap_evt->params.adv_report.data.p_data, p_gap_evt->params.adv_report.data.len, BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME);
 
                 if (NULL == deviceName)
                 {
@@ -490,10 +697,17 @@ static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context)
                 printf("\n\r");
 #endif
             }
+
+            
         }
 
         break;
     }
+}
+
+static void deviceDetectionHandler(void)
+{
+    programParams.deviceDetectionStatus = eDeviceDetected;
 }
 
 /**@brief Callback function for asserts in the SoftDevice.
@@ -521,6 +735,23 @@ static void idle_state_handle(void)
     if (NRF_LOG_PROCESS() == false)
     {
         nrf_pwr_mgmt_run();
+    }
+}
+
+char compareArray(uint8_t *arrayFirst, uint8_t *arraySecond, uint8_t size)
+{
+    if (arrayFirst == NULL || arraySecond == NULL)
+    {
+        return 0;
+    }
+    {
+        uint8_t i;
+        for (i = 0; i < size; i++)
+        {
+            if (arrayFirst[i] != arrayFirst[i])
+                return 1;
+        }
+        return 0;
     }
 }
 

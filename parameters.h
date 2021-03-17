@@ -10,14 +10,27 @@
 #include <stdint.h>
 #include <boards.h>
 /** CONSTANTS *****************************************************************/
-#define DEVICE_NAME "BEACON_MASTER"
 
 /** Enable/Disable Modules**/
-#define MASTER_ENABLE 1
+#define MASTER_ENABLE 0
 #define SLAVE_ENABLE  (!MASTER_ENABLE)
 
+#if MASTER_ENABLE
+#define DEVICE_NAME "NORDIC_EVREN_MASTER"
+#else
+#define DEVICE_NAME "NORDIC_EVREN_SLAVE"
+#endif
+
+/** Filtering Parameters **/
+#define FILTER_DEVICE_NAME_ENABLE 1
+#define FILTER_DEVICE_NAME        "NORDIC_EVREN_MASTER"
+
+#define RSSI_FILTER_ENABLE 1
+#define RSSI_FILTER_VALUE  (-40) // dBm
+
+#define BLE_ENABLE 1
 #define ADVERTISEMENT_ENABLE 1
-#define SCANNING_ENABLE      1
+#define SCANNING_ENABLE 1
 
 #define JLINK_DEBUG_PRINT_ENABLE 1
 
@@ -41,15 +54,15 @@
 #define SCAN_TIMEOUT         200                         //ms
 
 /** Sleeping Constants **/
-#define SLEEP_DURATION ()
+#define SLEEP_IDLE_MODE 500 // ms
+#define SLEEP_BLE_INIT  300 // ms
+#define SLEEP_DURATION (SLEEP_IDLE_MODE + SLEEP_BLE_INIT)
+
 
 /** Tasks Constants **/
-#define TCB_MAIN_TASK_INTERVAL 100
-#define TCB_MAIN_TASK_SWITCH_MODE_INTERVAL 0
-
-/** Filtering Parameters **/
-#define FIlTER_DEVICE_NAME_ENABLE 0
-#define FIlTER_DEVICE_NAME        "NORDIC_EVREN"
+#define TCB_PROGRAM_INIT_DELAY 1000
+#define TCB_PROGRAM_TASK_INTERVAL 100
+#define TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL 0
 
 #define TARGET_UUID BLE_UUID_GATT /**< Target device name that application is looking for. */
 
@@ -59,16 +72,23 @@ typedef enum
 {
     eModeFirstStart = 0,
     eModeSleep,
+    eModeInitBle,
     eModeScanning,
     eModeAdvertising,
-
 } teModes;
 
-typedef struct 
+typedef enum
+{
+    eDeviceNotDetected = 0,
+    eDeviceDetected,
+} teDeviceDetectionMode;
+
+typedef struct
 {
     uint8_t programStatus;
     uint32_t programCounter;
-}tsProgramParams;
+    uint8_t deviceDetectionStatus;
+} tsProgramParams;
 
 /** MACROS ********************************************************************/
 

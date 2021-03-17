@@ -307,7 +307,7 @@ void gap_params_init(const char *deviceName)
 
 /**@brief Function for initializing the GATT module.
  */
-void gatt_init(tsBleParams *params)
+void gattInit(tsBleParams *params)
 {
     ret_code_t err_code = nrf_ble_gatt_init(params->gatt, NULL);
     APP_ERROR_CHECK(err_code);
