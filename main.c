@@ -1,50 +1,12 @@
-/**
- * Copyright (c) 2014 - 2020, Nordic Semiconductor ASA
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form, except as embedded into a Nordic
- *    Semiconductor ASA integrated circuit in a product or a software update for
- *    such product, must reproduce the above copyright notice, this list of
- *    conditions and the following disclaimer in the documentation and/or other
- *    materials provided with the distribution.
- *
- * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * 4. This software, with or without modification, must only be used with a
- *    Nordic Semiconductor ASA integrated circuit.
- *
- * 5. Any software provided in binary form under this license must not be reverse
- *    engineered, decompiled, modified and/or disassembled.
- *
- * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL NORDIC SEMICONDUCTOR ASA OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
+/** @file       main.c
+ *  @brief      Beacon/Scanner BLE Program.
+ *  @author     Evren Kenanoglu
+ *  @date       1/03/2021
  */
-/** @file
+/**
+ * @brief Beacon/Scanner BLE Program.
  *
- * @defgroup ble_sdk_app_beacon_main main.c
- * @{
- * @ingroup ble_sdk_app_beacon
- * @brief Beacon Transmitter Sample Application main file.
- *
- * This file contains the source code for an Beacon transmitter sample application.
+ * This file contains the source code for an Beacon transmitter/Scanner application.
  */
 
 #include <stdbool.h>
@@ -78,7 +40,6 @@
 NRF_BLE_SCAN_DEF(bleScanModule); /**< Scanning Module instance. */
 NRF_BLE_GATT_DEF(gattModule);    /**< GATT module instance. */
 
-
 /** VARIABLES *****************************************************************/
 
 tsBleScanParams bleScanParams;
@@ -86,7 +47,7 @@ tsBleParams BLEParams;
 tsProgramParams programParams = {.programStatus  = eModeFirstStart,
                                  .programCounter = 0};
 
-/**< Scan parameters requested for scanning and connection. */
+/**< Scan parameters requested for scanning */
 static ble_gap_scan_params_t const bleGapScanParams =
     {
         .active        = 0x01,
@@ -97,6 +58,8 @@ static ble_gap_scan_params_t const bleGapScanParams =
         .scan_phys     = BLE_GAP_PHY_1MBPS,
 };
 
+
+// Dummy packages for advertising
 uint16_t dummyValue = 0xFF;
 
 uint8_t advertisingDataPacket[] =
@@ -130,7 +93,7 @@ uint8_t dataPacketExpected[] =
 
 /** LOCAL FUNCTION DECLARATIONS ***********************************************/
 void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name);
-static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context);
+static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context); 
 static void idle_state_handle(void);
 static void createTimers();
 APP_TIMER_DEF(timerRefreshAdvDataBLE);
@@ -141,10 +104,8 @@ static void deviceDetectionHandler(void);
 
 #if MASTER_ENABLE
 APP_TIMER_DEF(timerProgramMaster);
-
 #else
 APP_TIMER_DEF(timerProgramSlave);
-
 #endif
 
 
@@ -170,7 +131,6 @@ int main(void)
 
     ble_params_init(&BLEParams);
     ble_stack_init(&BLEParams);
-
     NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, bleEventHandler, NULL);
 
     gap_params_init(DEVICE_NAME);
@@ -187,9 +147,9 @@ int main(void)
 #endif
     startTimers();
 
-    NRF_LOG_INFO("Beacon example started.");
+    NRF_LOG_INFO("Program started.");
     
-    // Enter main loop.
+    // Enter main loop. This is for power management. 
     for (;;)
     {
         idle_state_handle();
@@ -251,7 +211,9 @@ static void timerCBRefreshAdvData()
 
 #if MASTER_ENABLE
 /**
- * @brief Ble Program Handler
+ * @brief Master Program Handler
+ *      
+ * @details Master program is always in a loop of scanning in duration of SCAN_TIMEOUT and advertising in duration of ADVERTISEMENT_TIMEOUT.
  * 
  */
 static void tcbProgramMasterHandler()
@@ -260,6 +222,9 @@ static void tcbProgramMasterHandler()
     ///> TX Power Lever Supported: -40dBm, -20dBm, -16dBm, -12dBm, -8dBm, -4dBm, 0dBm, +3dBm and +4dBm.
     switch (programParams.programStatus)
     {
+/****************************************************************************************************
+* 											    FIRST START
+*****************************************************************************************************/
         case eModeFirstStart:
         {
             programParams.programStatus  = eModeScanning;
@@ -270,10 +235,36 @@ static void tcbProgramMasterHandler()
 #endif
         }
         break;
+/****************************************************************************************************
+* 											    FIRST START END
+*****************************************************************************************************/
+/****************************************************************************************************
+* 											    SLEEP
+*****************************************************************************************************/
         case eModeSleep:
-            
+        {
+            if(programParams.programCounter >= SLEEP_DURATION) // Sleeping Timeout... Mode Changing to Scanning Mode... 
+            {
+                programParams.programStatus = eModeScanning; // eModeScanning
+                programParams.programCounter = 0;
+                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
 
-            break;
+            }
+            else // Sleeping...
+            {
+                programParams.programCounter += TCB_PROGRAM_SLEEP_MODE_INTERVAL;
+                programParams.programStatus = eModeSleep;
+                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_SLEEP_MODE_INTERVAL), NULL);                
+            }
+        }
+        break;
+/****************************************************************************************************
+* 											    SLEEP END
+*****************************************************************************************************/
+    
+/****************************************************************************************************
+* 											    SCANNING
+*****************************************************************************************************/
         case eModeScanning:
         {
             if (programParams.programCounter >= SCAN_TIMEOUT) // Scanning Timeout... Mode Changing to Advertisement....
@@ -314,6 +305,13 @@ static void tcbProgramMasterHandler()
             }
         }
         break;
+/****************************************************************************************************
+* 											    SCANNING END
+*****************************************************************************************************/
+
+/****************************************************************************************************
+* 											    ADVERTISING
+*****************************************************************************************************/
         case eModeAdvertising:
         {
             if (programParams.programCounter >= ADVERTISEMENT_TIMEOUT) // Advertising Timeout... Mode Changing to Scanning....
@@ -350,17 +348,26 @@ static void tcbProgramMasterHandler()
             }
         }
         break;
+/****************************************************************************************************
+* 											    ADVERTISING END
+*****************************************************************************************************/
 
         default:
             break;
     }
 }
 
-
 #else
 
 /**
  * @brief Slave Program Handler
+ *      
+ * @details Slave program starts with scanning mode in SCAN_TIMEOUT ms.
+ *          If master device is detected in the environment program modes is changed to advertising(ADVERTISEMENT_TIMEOUT).
+ *          if master device is not detected in the environment, program goes back to the sleep.(SLEEP_DURATION)
+ *          After that program starts to scan again.
+ * 
+ * @warning FILTER_DEVICE_NAME_ENABLE has to be setted 1 for detecting master device.
  * 
  */
 static void tcbProgramSlaveHandler()
@@ -369,9 +376,12 @@ static void tcbProgramSlaveHandler()
     ///> TX Power Lever Supported: -40dBm, -20dBm, -16dBm, -12dBm, -8dBm, -4dBm, 0dBm, +3dBm and +4dBm.
     switch (programParams.programStatus)
     {
+/****************************************************************************************************
+* 											    FIRST START
+*****************************************************************************************************/
         case eModeFirstStart:
         {
-            programParams.programStatus  = eModeScanning;
+            programParams.programStatus  = eModeScanning; // eModeScanning
             programParams.programCounter = 0;
             app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_INIT_DELAY), NULL);
 #if JLINK_DEBUG_PRINT_ENABLE
@@ -379,6 +389,14 @@ static void tcbProgramSlaveHandler()
 #endif
         }
         break;
+
+/****************************************************************************************************
+* 											    FIRST START END
+*****************************************************************************************************/
+
+/****************************************************************************************************
+* 											    SLEEP
+*****************************************************************************************************/
         case eModeSleep:
         {
             if(programParams.programCounter >= SLEEP_DURATION) // Sleeping Timeout... Mode Changing to Scanning Mode... 
@@ -386,26 +404,26 @@ static void tcbProgramSlaveHandler()
                 programParams.programStatus = eModeScanning; // eModeScanning
                 programParams.programCounter = 0;
                 app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
+
             }
             else // Sleeping...
             {
-                
-                programParams.programCounter += TCB_PROGRAM_TASK_INTERVAL;
+                programParams.programCounter += TCB_PROGRAM_SLEEP_MODE_INTERVAL;
                 programParams.programStatus = eModeSleep;
-                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);                
+                app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_SLEEP_MODE_INTERVAL), NULL);                
             }
         }
-
-        
         break;
+/****************************************************************************************************
+* 											    SLEEP END
+*****************************************************************************************************/
 
-        case eModeInitBle:
-        {
-            //TO DO: Later we will put a initial delay to BLE Init again...
-        }
+/****************************************************************************************************
+* 											    SCANNING
+*****************************************************************************************************/
         case eModeScanning:
         {
-            if (programParams.programCounter >= SCAN_TIMEOUT) // Scanning Timeout... Mode Changing to Advertisement....
+            if (programParams.programCounter >= SCAN_TIMEOUT) // Scanning Timeout... Mode Changing to Advertisement/Sleep....
             {
                 bleScanStop(&bleScanParams);
 
@@ -416,7 +434,7 @@ static void tcbProgramSlaveHandler()
                 {
                     programParams.programStatus = eModeAdvertising;
                     app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL), NULL);
-                    programParams.deviceDetectionStatus = eDeviceNotDetected;
+                    programParams.deviceDetectionStatus = eDeviceNotDetected; // Clear detection Status...
                 }
                 else // if master device is not detected in the environment during scanning...
                 {
@@ -453,6 +471,14 @@ static void tcbProgramSlaveHandler()
             }
         }
         break;
+
+/****************************************************************************************************
+* 											    SCANNING END
+*****************************************************************************************************/
+
+/****************************************************************************************************
+* 											    ADVERTISING
+*****************************************************************************************************/
         case eModeAdvertising:
         {
             if (programParams.programCounter >= ADVERTISEMENT_TIMEOUT) // Advertising Timeout... Mode Changing to Scanning....
@@ -489,6 +515,9 @@ static void tcbProgramSlaveHandler()
             }
         }
         break;
+/****************************************************************************************************
+* 											    ADVERTISING END 
+*****************************************************************************************************/
 
         default:
             break;
@@ -497,41 +526,48 @@ static void tcbProgramSlaveHandler()
 
 #endif
 
-/**
- * @brief Create a Timers object
- * 
- */
+/**@brief Create App Timer Objects */
 void createTimers()
 {
     ret_code_t errCode;
 //errCode = app_timer_create(&timerRefreshAdvDataBLE, APP_TIMER_MODE_REPEATED, timerCBRefreshAdvData);
 #if MASTER_ENABLE
-
     errCode = app_timer_create(&timerProgramMaster, APP_TIMER_MODE_SINGLE_SHOT, tcbProgramMasterHandler);
-
+    NRF_LOG_INFO(" Program Started as Master!");
 #else
-
     errCode = app_timer_create(&timerProgramSlave, APP_TIMER_MODE_SINGLE_SHOT, tcbProgramSlaveHandler);
-
+    NRF_LOG_INFO(" Program Started as Slave!");
+    APP_ERROR_CHECK(errCode);
 #endif
 }
 
+
+/**@brief Starts App Timers*/
 void startTimers()
 {
     ret_code_t errCode;
     //errCode = app_timer_start(timerRefreshAdvDataBLE,   APP_TIMER_TICKS(ADVERTISEMENT_PACKET_UPDATE_INTERVAL), NULL);
-
 #if MASTER_ENABLE
-
     errCode = app_timer_start(timerProgramMaster, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);
-
 #else
-
     errCode = app_timer_start(timerProgramSlave, APP_TIMER_TICKS(TCB_PROGRAM_TASK_INTERVAL), NULL);
+    APP_ERROR_CHECK(errCode);
 
 #endif
 }
 
+
+/**
+ * @brief All BLE Events are handled by this function
+ * 
+ * @param p_ble_evt BLE Event Pointer 
+ * @param p_context Context Pointer
+ * 
+ * @details In this function, all ble device in the environment are scanned and reported. 
+ *          Also filtering with the device name and filtering with RSSI are available.
+ *          
+ *          After device detection, program calls deviceDetectionHandler() function.
+ */
 static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context)
 {
     ret_code_t err_code;
@@ -704,7 +740,10 @@ static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context)
         break;
     }
 }
-
+/**
+ * @brief Handler after detection master device in the environment
+ * 
+ */
 static void deviceDetectionHandler(void)
 {
     programParams.deviceDetectionStatus = eDeviceDetected;
