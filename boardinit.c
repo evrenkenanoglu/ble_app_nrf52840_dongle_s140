@@ -56,6 +56,10 @@
     APP_ERROR_CHECK(err_code);
 }
 
+/**
+ * @brief boardInit initilizes logs, leds, timers and power management
+ * 
+ */
 void boardInit(void)
 {
     log_init();
