@@ -24,6 +24,7 @@
  *
  * @details Encodes the required advertising data and passes it to the stack.
  *          Also builds a structure to be passed to the stack when starting advertising.
+ * @param params    Ble advertising parameters pointer
  */
 void advertising_init(tsBleParams *params)
 {
@@ -60,7 +61,10 @@ void advertising_init(tsBleParams *params)
     APP_ERROR_CHECK(err_code);
 }
 
-/**@brief Function for starting advertising.
+/**
+ * @brief Function for starting advertising.
+ * 
+ * @param params    BLE advertising parameters pointer
  */
 ret_code_t bleAdvertisingStart(tsBleParams *params)
 {
@@ -78,6 +82,8 @@ ret_code_t bleAdvertisingStart(tsBleParams *params)
  * @brief Function for stop advertising.
  * 
  * @param params BLE structure object pointer
+ * 
+ * @return errCode returns error code
  */
 ret_code_t bleAdvertisingStop(tsBleParams *params)
 {
@@ -90,16 +96,23 @@ ret_code_t bleAdvertisingStop(tsBleParams *params)
     return errCode;
 }
 
-/**@brief Function for initializing the BLE stack.
+/**
+ * @brief Function for initializing the BLE stack.
  *
  * @details Initializes the SoftDevice and the BLE event interrupt.
  */
 void ble_stack_init(tsBleParams *params)
 {
     ret_code_t err_code;
-
-    err_code = nrf_sdh_enable_request();
-    APP_ERROR_CHECK(err_code);
+  
+    if(nrf_sdh_is_enabled())
+    {
+    }
+    else
+    {
+      err_code = nrf_sdh_enable_request();
+      APP_ERROR_CHECK(err_code);
+    }
 
     // Configure the BLE stack using the default settings.
     // Fetch the start address of the application RAM.
@@ -111,10 +124,13 @@ void ble_stack_init(tsBleParams *params)
     err_code = nrf_sdh_ble_enable(&ram_start);
     APP_ERROR_CHECK(err_code);
 
-
-
 }
 
+/**
+ * @brief Function to initiliaze BLE params
+ * 
+ * @param params BLE Parameters pointer
+ */
 void ble_params_init(tsBleParams *params)
 {
     params->m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET; /**< Advertising handle used to identify an advertising set. */
@@ -128,11 +144,19 @@ void ble_params_init(tsBleParams *params)
 
     params->bleAdvStatus = eBleIdle;
     params->txPower      = POWER_TX_LEVEL_0_DB;
-
-
-
 }
 
+/**
+ * @brief Function to update Ble advetising data
+ * 
+ * @details This function stop advertising and encodes required data for advertising and start it again.
+ *  
+ * @param params            BLE advertising parameters pointer
+ * @param updateData        Data pointer to be updated
+ * @param updateDataSize    Data size to be updated 
+ * 
+ * @return ret_code_t       returns error code
+ */
 ret_code_t bleAdvUpdateData(tsBleParams *params, void *updateData, uint32_t updateDataSize)
 {
     ret_code_t errCode;
@@ -182,41 +206,11 @@ ret_code_t bleAdvUpdateData(tsBleParams *params, void *updateData, uint32_t upda
 }
 
 /**
- * @brief 
+ * @brief Function to Initialize BLE Scanning
  * 
- * @param p_scan_evt 
+ * @param params BLE scan parameters pointer
+ * @return ret_code_t returns error code 
  */
-static void scan_evt_handler(scan_evt_t const * p_scan_evt)
-{
-    ret_code_t err_code;
-    switch(p_scan_evt->scan_evt_id)
-    {
-        case NRF_BLE_SCAN_EVT_WHITELIST_REQUEST:
-        {
-            
-        } break;
-
-        case NRF_BLE_SCAN_EVT_CONNECTING_ERROR:
-        {
-
-        } break;
-
-        case NRF_BLE_SCAN_EVT_SCAN_TIMEOUT:
-        {
-            printf("Scan timed out.");
-        } break;
-
-        case NRF_BLE_SCAN_EVT_FILTER_MATCH:
-            break;
-        case NRF_BLE_SCAN_EVT_WHITELIST_ADV_REPORT:
-            break;
-
-        default:
-          break;
-    }
-}
-
-
 ret_code_t bleScanInit(tsBleScanParams *params)
 {
     ret_code_t errCode;
@@ -232,6 +226,12 @@ ret_code_t bleScanInit(tsBleScanParams *params)
     return errCode;
 }
 
+/**
+ * @brief Function to Start Scanning
+ * 
+ * @param params BLE Scan parameters
+ * @return ret_code_t returns error code
+ */
 ret_code_t bleScanStart(tsBleScanParams *params)
 {
     ret_code_t errCode;
@@ -244,12 +244,19 @@ ret_code_t bleScanStart(tsBleScanParams *params)
     return errCode;
 }
 
+/**
+ * @brief Function to stop scanning
+ */
 void bleScanStop(tsBleScanParams *params)
 {
     nrf_ble_scan_stop(); 
 }
 
-
+/**
+ * @brief Function for setting Ble scan filter parameters 
+ * 
+ * @return errCode  returns Error Code
+*/
 ret_code_t bleScanFilterSet(tsBleScanParams *params, tsBleScanFilters *paramsFilter)
 {
     ret_code_t errCode;
@@ -257,6 +264,7 @@ ret_code_t bleScanFilterSet(tsBleScanParams *params, tsBleScanFilters *paramsFil
     return errCode;
 }
 
+/**@brief Function for enabling Ble scan filters*/
 ret_code_t bleScanFiltersEnable(tsBleScanParams *params)
 {
     ret_code_t errCode;
@@ -264,6 +272,7 @@ ret_code_t bleScanFiltersEnable(tsBleScanParams *params)
     return errCode;
 }
 
+/**@brief Function for disabling Ble scan filters*/
 ret_code_t bleScanFiltersDisable(tsBleScanParams *params)
 {
     ret_code_t errCode;
@@ -274,7 +283,7 @@ ret_code_t bleScanFiltersDisable(tsBleScanParams *params)
 /**@brief Function for the GAP initialization.
  *
  * @details This function sets up all the necessary GAP (Generic Access Profile) parameters of the
- *          device including the device name, appearance, and the preferred connection parameters.
+ *          device including the device name.
  */
 void gap_params_init(const char *deviceName)
 {
@@ -289,104 +298,41 @@ void gap_params_init(const char *deviceName)
                                           (const uint8_t *)deviceName,
                                           strlen(deviceName));
     APP_ERROR_CHECK(err_code);
-
-    ///* YOUR_JOB: Use an appearance value matching the application's use case.
-    //   err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_);
-    //   APP_ERROR_CHECK(err_code); */
-
-    //memset(&gap_conn_params, 0, sizeof(gap_conn_params));
-
-    //gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
-    //gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
-    //gap_conn_params.slave_latency     = SLAVE_LATENCY;
-    //gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
-
-    //err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
-    //APP_ERROR_CHECK(err_code);
 }
 
-/**@brief Function for initializing the GATT module.
- */
+/**@brief Function for initializing the GATT module. */
 void gattInit(tsBleParams *params)
 {
     ret_code_t err_code = nrf_ble_gatt_init(params->gatt, NULL);
     APP_ERROR_CHECK(err_code);
 }
-// ret_code_t bleAdvertisingAdvdataUpdate(tsBleParams *params, void *updateData)
-// {
-//     uint8_t flags = BLE_GAP_ADV_FLAG_BR_EDR_NOT_SUPPORTED;
 
-//     VERIFY_PARAM_NOT_NULL(params);
-//     // if (p_advertising->initialized == false)
-//     // {
-//     //     return NRF_ERROR_INVALID_STATE;
-//     // }
+/**@brief Function for softdevice enabling */
+ret_code_t sdEnable(void)
+{
+    ret_code_t errCode;
+    
+    nrf_clock_lf_cfg_t const clock_lf_cfg =
+    {
+        .source       = NRF_SDH_CLOCK_LF_SRC,
+        .rc_ctiv      = NRF_SDH_CLOCK_LF_RC_CTIV,
+        .rc_temp_ctiv = NRF_SDH_CLOCK_LF_RC_TEMP_CTIV,
+        .accuracy     = NRF_SDH_CLOCK_LF_ACCURACY
+    };
 
-//     if ((p_advdata == NULL) && (p_srdata == NULL))
-//     {
-//         return NRF_ERROR_NULL;
-//     }
+    errCode = sd_softdevice_enable(&clock_lf_cfg, app_error_fault_handler);
 
-//     ble_gap_adv_data_t newAdvData;
-//     memset(&new_adv_data, 0, sizeof(new_adv_data));
+    return errCode;
+}
 
-//     if (updateData != NULL)
-//     {
-//         new_adv_data.adv_data.p_data =
-//             (p_advertising->p_adv_data->adv_data.p_data != p_advertising->enc_advdata[0]) ?
-//              p_advertising->enc_advdata[0] : p_advertising->enc_advdata[1];
-//         new_adv_data.adv_data.len = adv_set_data_size_max_get(p_advertising);
+/**@brief Function for softdevice disabling */
+ret_code_t sdDisable(void)
+{
+    ret_code_t errCode;
+    
+    errCode = sd_softdevice_disable();
 
-//         newAdvdata.name_type             = BLE_ADVDATA_NO_NAME;
-//         newAdvdata.flags                 = flags;
-//         newAdvdata.p_manuf_specific_data = &manuf_specific_data;
-
-//         ret_code_t ret = ble_advdata_encode(p_advdata,
-//                                             new_adv_data.adv_data.p_data,
-//                                             &new_adv_data.adv_data.len);
-//         VERIFY_SUCCESS(ret);
-//     }
-
-//     // if (p_srdata != NULL)
-//     // {
-//     //     new_adv_data.scan_rsp_data.p_data =
-//     //         (p_advertising->p_adv_data->scan_rsp_data.p_data != p_advertising->enc_scan_rsp_data[0]) ?
-//     //          p_advertising->enc_scan_rsp_data[0] : p_advertising->enc_scan_rsp_data[1];
-//     //     new_adv_data.scan_rsp_data.len = adv_set_data_size_max_get(p_advertising);
-
-//     //     ret_code_t ret = ble_advdata_encode(p_srdata,
-//     //                                         new_adv_data.scan_rsp_data.p_data,
-//     //                                         &new_adv_data.scan_rsp_data.len);
-//     //     VERIFY_SUCCESS(ret);
-//     // }
-
-//     memcpy(&params->advdata, &new_adv_data, sizeof(params->advdata));
-
-//     params->ad->p_adv_data = &p_advertising->adv_data;
-
-//     return sd_ble_gap_adv_set_configure(&params->m_adv_handle,
-//                                         p_advertising->p_adv_data,
-//                                         NULL);
-// }
-
-//ret_code_t BLE_AdvertisingStop(void)
-//{
-//    ret_code_t err_code = NRF_SUCCESS;
-
-//    if (m_adv_handle != BLE_GAP_ADV_SET_HANDLE_NOT_SET)
-//    {
-//        printf("BLE Stop advertising.\n");
-//        err_code = sd_ble_gap_adv_stop(m_adv_handle);
-//        if (err_code != NRF_ERROR_INVALID_STATE)
-//        {
-//            APP_ERROR_CHECK(err_code);
-//        }
-//        m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
-//    }
-
-//    return err_code;
-//}
-
-
+    return errCode;
+}
 
 /** LOCAL FUNCTION DEFINITIONS ************************************************/

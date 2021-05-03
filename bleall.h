@@ -11,14 +11,12 @@
 #include "nrf_soc.h"
 #include "nrf_sdh.h"
 #include "nrf_sdh_ble.h"
+#include "nrf_sdm.h"
 #include "ble_advdata.h"
 #include "boardinit.h"
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_scan.h"
 #include "ble_gap.h"
-
-
-
 
 /** CONSTANTS *****************************************************************/
 #define APP_BLE_CONN_CFG_TAG            1                                  /**< A tag identifying the SoftDevice BLE configuration. */
@@ -72,6 +70,10 @@
 #define INTERFACE
 #endif
 
+/**
+ * @brief BLE enum for Ble Status
+ * 
+ */
 typedef enum 
 {
     eBleIdle =0,
@@ -92,6 +94,10 @@ typedef enum
     eTxPower4Dbm,
 }teBleAdvTxPower;
 
+/**
+ * @brief BLE Scan Parameters
+ * 
+ */
 typedef struct
 {
     nrf_ble_scan_init_t initScan;
@@ -106,6 +112,11 @@ typedef struct
     const void *filter;
 }tsBleScanFilters;
 
+
+/**
+ * @brief BLE Advertisement Parameters
+ * 
+ */
 typedef struct 
 {
     uint8_t bleAdvStatus;
@@ -119,14 +130,12 @@ typedef struct
     void (*bleEventHandler)(void);
 }tsBleParams;
 
-
-
 typedef struct 
 {
     uint32_t dummy_Value;
 }tsAdvertisementDataPackage;
 
-
+/**@brief Dummy advertising array */ 
 static uint8_t m_beacon_info[APP_BEACON_INFO_LENGTH] = /**< Information advertised by the Beacon. */
     {
         APP_DEVICE_TYPE,     // Manufacturer specific information. Specifies the device type in this
@@ -156,9 +165,13 @@ INTERFACE ret_code_t bleAdvUpdateData(tsBleParams *params, void *updateData, uin
 INTERFACE ret_code_t bleScanInit(tsBleScanParams *params);
 INTERFACE ret_code_t bleScanStart(tsBleScanParams *params);
 INTERFACE void bleScanStop(tsBleScanParams *params);
+
+//** These functions are not used currently, in case of any need
 INTERFACE ret_code_t bleScanFilterSet(tsBleScanParams *params, tsBleScanFilters *paramsFilter);
 INTERFACE ret_code_t bleScanFiltersEnable(tsBleScanParams *params);
 INTERFACE ret_code_t bleScanFiltersDisable(tsBleScanParams *params);
+INTERFACE ret_code_t sdEnable();
+INTERFACE ret_code_t sdDisable();
 
 #undef INTERFACE // Should not let this roam free
 
