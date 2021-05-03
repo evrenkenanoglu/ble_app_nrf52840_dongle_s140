@@ -54,15 +54,15 @@
 #define SCAN_TIMEOUT         200                         //ms
 
 /** Sleeping Constants **/
-#define SLEEP_IDLE_MODE 500 // ms
-#define SLEEP_BLE_INIT  300 // ms
+#define SLEEP_IDLE_MODE 2000 // ms
+#define SLEEP_BLE_INIT  0 // ms
 #define SLEEP_DURATION (SLEEP_IDLE_MODE + SLEEP_BLE_INIT)
 
-
 /** Tasks Constants **/
-#define TCB_PROGRAM_INIT_DELAY 1000
-#define TCB_PROGRAM_TASK_INTERVAL 100
-#define TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL 0
+#define TCB_PROGRAM_INIT_DELAY                1000 //ms
+#define TCB_PROGRAM_TASK_INTERVAL             100  //ms
+#define TCB_PROGRAM_TASK_SWITCH_MODE_INTERVAL 0    // ms
+#define TCB_PROGRAM_SLEEP_MODE_INTERVAL       SLEEP_DURATION
 
 #define TARGET_UUID BLE_UUID_GATT /**< Target device name that application is looking for. */
 

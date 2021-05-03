@@ -96,7 +96,6 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name);
 static void bleEventHandler(ble_evt_t const *p_ble_evt, void *p_context); 
 static void idle_state_handle(void);
 static void createTimers();
-APP_TIMER_DEF(timerRefreshAdvDataBLE);
 static void timerCBRefreshAdvData();
 static char compareArray(uint8_t *arrayFirst, uint8_t *arraySecond, uint8_t size);
 static void deviceDetectionHandler(void);
@@ -107,6 +106,7 @@ APP_TIMER_DEF(timerProgramMaster);
 #else
 APP_TIMER_DEF(timerProgramSlave);
 #endif
+APP_TIMER_DEF(timerRefreshAdvDataBLE);
 
 
 static void tcbProgramMasterHandler();

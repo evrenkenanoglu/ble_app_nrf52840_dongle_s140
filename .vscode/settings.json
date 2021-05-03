@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "bleall.h": "c",
+        "nrf_ble_gatt.h": "c"
+    }
+}
